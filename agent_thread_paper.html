@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Thread: Governed Initialization and Closure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1917; --ink-mid: #4a4845; --ink-light: #8a8880;
+    --page: #f7f6f3; --surface: #ffffff; --rule: #e2e0da;
+    --consumer: #0F6E56; --consumer-bg: #E1F5EE;
+    --coding: #993C1D; --coding-bg: #FAECE7;
+    --stage1: #5F5E5A; --stage1-bg: #F1EFE8;
+    --stage2: #0F6E56; --stage2-bg: #E1F5EE;
+    --stage3: #534AB7; --stage3-bg: #EEEDFE;
+    --accent: #534AB7; --accent-bg: #EEEDFE;
+    --gci: #1C4E8A; --gci-bg: #E8F0FB;
+    --gct: #6B3FA0; --gct-bg: #F0E8FB;
+    --thread: #0F6E56; --thread-bg: #E1F5EE;
+    --warn: #854F0B; --warn-bg: #FAEEDA;
+    --radius-sm: 4px; --radius: 8px; --radius-lg: 14px;
+    --sans: 'Inter', system-ui, sans-serif;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--sans); background: var(--page); color: var(--ink); line-height: 1.75; }
+
+  /* COVER */
+  .cover { background: var(--ink); color: var(--page); padding: 80px 60px 72px; position: relative; overflow: hidden; }
+  .cover::before { content:''; position:absolute; top:-120px; right:-80px; width:480px; height:480px; border-radius:50%; border:1px solid rgba(255,255,255,0.07); }
+  .cover::after  { content:''; position:absolute; top:-40px;  right:60px;  width:280px; height:280px; border-radius:50%; border:1px solid rgba(255,255,255,0.05); }
+  .cover-series { font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.3); margin-bottom:14px; }
+  .cover-eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:28px; }
+  .cover-title { font-family:var(--serif); font-size:clamp(36px,5vw,58px); line-height:1.08; font-weight:400; max-width:680px; margin-bottom:20px; }
+  .cover-title em { font-style:italic; color:rgba(255,255,255,0.5); }
+  .cover-subtitle { font-size:15px; font-weight:300; color:rgba(255,255,255,0.55); max-width:520px; line-height:1.6; margin-bottom:56px; }
+  .cover-meta { display:flex; gap:40px; flex-wrap:wrap; border-top:1px solid rgba(255,255,255,0.1); padding-top:28px; }
+  .cover-meta-item { display:flex; flex-direction:column; gap:4px; }
+  .cover-meta-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.3); }
+  .cover-meta-value { font-size:13px; font-weight:500; color:rgba(255,255,255,0.7); }
+
+  /* LAYOUT */
+  .paper { max-width:860px; margin:0 auto; padding:0 40px 100px; }
+
+  /* SERIES CALLOUT */
+  .series-callout { background:var(--accent-bg); border:1px solid rgba(83,74,183,0.25); border-radius:var(--radius-lg); padding:20px 28px; margin:48px 0 0; display:flex; gap:18px; align-items:flex-start; }
+  .series-callout-icon { font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); padding-top:2px; white-space:nowrap; }
+  .series-callout-body { font-size:13px; color:var(--ink-mid); line-height:1.7; }
+  .series-callout-body strong { color:var(--ink); font-weight:600; }
+
+  /* FOUNDATIONS */
+  .foundations { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-lg); padding:24px 28px; margin:24px 0 0; display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:start; }
+  .foundations-icon { font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); padding-top:2px; white-space:nowrap; }
+  .foundations-body { font-size:13px; color:var(--ink-mid); line-height:1.7; }
+  .foundations-body strong { color:var(--ink); font-weight:600; }
+  .foundations-body code { font-family:var(--mono); font-size:11px; background:var(--page); padding:1px 5px; border-radius:3px; }
+  .foundations-refs { display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--rule); }
+  .foundations-ref { font-size:12px; color:var(--ink-light); font-style:italic; line-height:1.6; }
+  .foundations-ref strong { color:var(--ink-mid); font-style:normal; }
+
+  /* TOC */
+  .toc { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-lg); padding:32px 36px; margin:24px 0 48px; }
+  .toc-title { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-light); margin-bottom:20px; }
+  .toc-list { list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .toc-list li { display:flex; align-items:baseline; gap:12px; }
+  .toc-num { font-family:var(--mono); font-size:11px; color:var(--ink-light); min-width:20px; }
+  .toc-list a { font-size:14px; font-weight:500; color:var(--ink); text-decoration:none; border-bottom:1px solid transparent; transition:border-color 0.15s, color 0.15s; }
+  .toc-list a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* SECTIONS */
+  .section { margin:60px 0; }
+  .section-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-light); margin-bottom:12px; }
+  .section-title { font-family:var(--serif); font-size:clamp(24px,3.5vw,34px); font-weight:400; line-height:1.2; color:var(--ink); margin-bottom:24px; }
+  .section-title em { font-style:italic; color:var(--ink-mid); }
+  .rule { border:none; border-top:1px solid var(--rule); margin:48px 0; }
+  p { font-size:15px; line-height:1.8; color:var(--ink-mid); margin-bottom:18px; }
+  p:last-child { margin-bottom:0; }
+  p strong { color:var(--ink); font-weight:600; }
+
+  /* PULL QUOTE */
+  .pull-quote { border-left:3px solid var(--accent); padding:20px 28px; margin:36px 0; background:var(--accent-bg); border-radius:0 var(--radius) var(--radius) 0; }
+  .pull-quote p { font-family:var(--serif); font-size:18px; line-height:1.55; color:var(--ink); font-weight:400; margin:0; }
+
+  /* THREAD FLOW DIAGRAM */
+  .flow-diagram { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-lg); padding:36px 32px; margin:32px 0; overflow-x:auto; }
+  .flow-diagram-title { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-light); margin-bottom:32px; }
+  .flow-track { display:flex; flex-direction:column; align-items:flex-start; gap:0; min-width:560px; }
+  .flow-node { display:flex; align-items:stretch; gap:0; width:100%; }
+  .flow-state { border-radius:var(--radius); padding:14px 20px; min-width:160px; max-width:160px; display:flex; flex-direction:column; gap:3px; flex-shrink:0; }
+  .flow-state-name { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; }
+  .flow-state-sub { font-size:10px; font-style:italic; opacity:0.7; }
+  .flow-desc { padding:14px 20px 14px 24px; font-size:13px; color:var(--ink-mid); line-height:1.6; flex:1; display:flex; align-items:center; border-left:2px solid var(--rule); margin-left:16px; }
+  .flow-arrow { display:flex; align-items:center; padding:0 0 0 20px; height:28px; }
+  .flow-arrow-col { display:flex; flex-direction:column; align-items:flex-start; gap:0; }
+  .flow-stem { width:2px; height:12px; background:var(--rule); margin-left:79px; }
+  .flow-label { font-family:var(--mono); font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-light); margin-left:88px; padding:2px 0; }
+  .flow-arrow-icon { font-size:14px; color:var(--ink-light); margin-left:73px; line-height:1; }
+  /* state colours */
+  .fs-open     { background:var(--stage1-bg); } .fs-open     .flow-state-name { color:var(--stage1); }
+  .fs-active   { background:var(--thread-bg); } .fs-active   .flow-state-name { color:var(--thread); }
+  .fs-compact  { background:var(--warn-bg);   } .fs-compact  .flow-state-name { color:var(--warn); }
+  .fs-suspend  { background:var(--gci-bg);    } .fs-suspend  .flow-state-name { color:var(--gci); }
+  .fs-closed   { background:var(--gct-bg);    } .fs-closed   .flow-state-name { color:var(--gct); }
+  .fs-reopen   { background:var(--coding-bg); } .fs-reopen   .flow-state-name { color:var(--coding); }
+  /* branch arrow for reopen */
+  .flow-branch { display:flex; align-items:center; gap:8px; margin:8px 0 0 60px; }
+  .flow-branch-line { width:40px; height:2px; background:var(--rule); }
+  .flow-branch-label { font-family:var(--mono); font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-light); }
+
+  /* COMPARE GRID — 2 col */
+  .compare-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:2px; background:var(--rule); border-radius:var(--radius-lg); overflow:hidden; margin:32px 0; }
+  .compare-col { background:var(--surface); padding:28px 24px; }
+  .compare-col.hi-gci { background:var(--gci-bg); }
+  .compare-col.hi-gct { background:var(--gct-bg); }
+  .compare-col-label { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-light); margin-bottom:10px; }
+  .compare-col.hi-gci .compare-col-label { color:var(--gci); }
+  .compare-col.hi-gct .compare-col-label { color:var(--gct); }
+  .compare-col-title { font-size:15px; font-weight:600; color:var(--ink); margin-bottom:16px; }
+  .compare-col ul { list-style:none; display:flex; flex-direction:column; gap:8px; }
+  .compare-col ul li { font-size:13px; color:var(--ink-mid); line-height:1.55; padding-left:14px; position:relative; }
+  .compare-col ul li::before { content:'·'; position:absolute; left:2px; color:var(--ink-light); }
+  .compare-col.hi-gci ul li::before { color:var(--gci); }
+  .compare-col.hi-gct ul li::before { color:var(--gct); }
+  .compare-verdict { margin-top:16px; padding-top:14px; border-top:1px solid var(--rule); font-size:11px; font-weight:500; color:var(--ink-light); font-family:var(--mono); text-transform:uppercase; letter-spacing:0.08em; }
+  .compare-col.hi-gci .compare-verdict { color:var(--gci); }
+  .compare-col.hi-gct .compare-verdict { color:var(--gct); }
+
+  /* COMPARE GRID — 3 col (reopen) */
+  .compare-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:2px; background:var(--rule); border-radius:var(--radius-lg); overflow:hidden; margin:32px 0; }
+  .compare-grid-3 .compare-col.highlight { background:var(--accent-bg); }
+  .compare-grid-3 .compare-col.highlight .compare-col-title { color:var(--accent); }
+  .compare-grid-3 .compare-col.highlight ul li::before { color:var(--accent); }
+  .compare-grid-3 .compare-col.highlight .compare-verdict { color:var(--accent); }
+
+  /* PIPELINE */
+  .pipeline { background:var(--ink); border-radius:var(--radius-lg); padding:40px; margin:36px 0; }
+  .pipeline-title { font-family:var(--serif); font-size:20px; font-weight:400; color:rgba(255,255,255,0.9); margin-bottom:28px; }
+  .pipeline-steps { display:flex; flex-direction:column; }
+  .pipeline-step { display:flex; gap:20px; align-items:flex-start; padding:16px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .pipeline-step:last-child { border-bottom:none; }
+  .pipeline-step-num { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:rgba(255,255,255,0.25); min-width:24px; padding-top:3px; }
+  .pipeline-step-title { font-size:14px; font-weight:600; color:rgba(255,255,255,0.85); margin-bottom:4px; }
+  .pipeline-step-desc { font-size:13px; color:rgba(255,255,255,0.5); line-height:1.6; }
+  .p-tag { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:2px 7px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  .p-tag.gci { background:rgba(28,78,138,0.25); color:#7BAEE8; }
+  .p-tag.gct { background:rgba(107,63,160,0.25); color:#C09EE8; }
+  .p-tag.ep  { background:rgba(15,110,86,0.25);  color:#5DCAA5; }
+  .p-tag.sem { background:rgba(83,74,183,0.25);  color:#A9A3F0; }
+  .p-tag.usr { background:rgba(133,79,11,0.25);  color:#E8A84A; }
+
+  /* PRINCIPLES */
+  .principles { display:flex; flex-direction:column; gap:2px; margin:32px 0; }
+  .principle { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); padding:24px 28px; display:flex; gap:24px; align-items:flex-start; }
+  .principle-icon { font-family:var(--mono); font-size:13px; color:var(--accent); min-width:28px; padding-top:2px; }
+  .principle-title { font-size:14px; font-weight:600; color:var(--ink); margin-bottom:6px; }
+  .principle-body { font-size:13px; color:var(--ink-mid); line-height:1.65; }
+
+  /* SUMMARY TABLE */
+  .summary-table-wrap { margin:32px 0; overflow-x:auto; }
+  .summary-table { width:100%; border-collapse:separate; border-spacing:2px; min-width:560px; }
+  .summary-table th { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:500; padding:10px 16px; text-align:left; border-radius:var(--radius-sm); background:var(--page); color:var(--ink-light); }
+  .summary-table th.h-gci { background:var(--gci-bg); color:var(--gci); }
+  .summary-table th.h-gct { background:var(--gct-bg); color:var(--gct); }
+  .summary-table td { background:var(--surface); padding:14px 16px; vertical-align:top; border-radius:var(--radius-sm); font-size:12px; color:var(--ink-mid); line-height:1.55; }
+  .summary-table td.row-head { background:var(--page); font-weight:600; font-size:13px; color:var(--ink); }
+
+  /* FOOTER */
+  .paper-footer { border-top:1px solid var(--rule); padding-top:32px; margin-top:80px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+  .paper-footer-note { font-family:var(--mono); font-size:10px; color:var(--ink-light); letter-spacing:0.06em; }
+
+  @media (max-width:640px) {
+    .cover { padding:48px 28px 52px; }
+    .paper { padding:0 20px 60px; }
+    .compare-grid-2 { grid-template-columns:1fr; }
+    .compare-grid-3 { grid-template-columns:1fr; }
+    .cover-meta { gap:24px; }
+    .foundations { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-series">Agent Intelligence Series · Paper 2 of 2</div>
+  <h1 class="cover-title">Agent thread:<br><em>governed initialization and closure</em></h1>
+  <p class="cover-subtitle">Why every agent conversation needs a governed beginning and a deliberate end — and how a disciplined thread turns into durable memory.</p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Focus</span>
+      <span class="cover-meta-value">Thread lifecycle · GCI · GCT</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Version</span>
+      <span class="cover-meta-value">Draft 1.6</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Preceding paper</span>
+     <span class="cover-meta-value">Agent Memory: Explained</span>
+  </div>
+</div>
+
+<div class="paper">
+
+  <div class="series-callout">
+    <div class="series-callout-icon">Series note</div>
+    <div class="series-callout-body">
+      This paper is the direct sequel to <strong>Agent Memory</strong>, which established the three-tier memory model — episodic, semantic, and procedural — as the missing layer in most agent deployments. That paper made the case for <em>what</em> to accumulate. This paper addresses the mechanism that makes accumulation possible: the thread. Without a governed thread lifecycle, memory does not compound.
+    </div>
+  </div>
+
+  <div class="foundations">
+    <div class="foundations-icon">Foundations</div>
+    <div class="foundations-body">
+      <strong>Thread is a production primitive of agent implementation.</strong> The thread as a named, addressable conversation unit is already a first-class construct in the leading agentic frameworks. This paper's contribution is not the thread itself — it is the governance layer (GCI and GCT) that most framework implementations currently leave to the developer, and the argument that this governance gap is the missing precondition for memory to compound.
+      <div class="foundations-refs">
+        <div class="foundations-ref"><strong>Zeigarnik effect</strong> — incomplete tasks occupy greater cognitive load than completed ones (Zeigarnik, 1927). The psychological grounding for why ungoverned thread endings create residual cognitive burden for users, and why deliberate closure, like turning a page, produces genuine relief rather than mere convenience.</div>
+        <div class="foundations-ref"><strong>LangGraph</strong> — thread as a checkpointed execution unit identified by <code>thread_id</code>; state persisted after every node transition and resumable across restarts. docs.langchain.com/oss/python/langgraph/persistence</div>
+        <div class="foundations-ref"><strong>OpenAI Assistants API / Responses API</strong> — Thread (now migrating to Conversation in the Responses API) as a persistent container for messages and runs, with automatic context-window truncation. developers.openai.com/api/docs/assistants/deep-dive</div>
+        <div class="foundations-ref"><strong>Contextual Memory Virtualisation (CMV)</strong> — DAG-based state management treating conversation state as a version-controlled resource, with snapshot, branch, and trim primitives (Santoni, Imperial College London, arXiv:2602.22402, 2026). Grounds the thread branching model in Section 06.</div>
+        <div class="foundations-ref"><strong>Mastra</strong> — thread identified by <code>thread</code> (conversation ID) and <code>resource</code> (owning user or entity); provides <code>createThread()</code>, <code>saveThread()</code>, and <code>summarizeThread()</code> lifecycle methods. mastra.ai/docs/memory/threads-and-resources</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <ol class="toc-list">
+      <li><span class="toc-num">01</span><a href="#s1">The missing mechanism — why memory needs a container</a></li>
+      <li><span class="toc-num">02</span><a href="#s2">The thread — a flow state machine, not a chat log</a></li>
+      <li><span class="toc-num">03</span><a href="#s3">Governed Conversation Initiation (GCI)</a></li>
+      <li><span class="toc-num">04</span><a href="#s4">Governed Conversation Termination (GCT)</a></li>
+      <li><span class="toc-num">05</span><a href="#s5">The memory pipeline — what fires on close</a></li>
+      <li><span class="toc-num">06</span><a href="#s6">Reopening and branching</a></li>
+      <li><span class="toc-num">07</span><a href="#s7">Strategic implications</a></li>
+    </ol>
+  </nav>
+
+  <!-- S1 -->
+  <section class="section" id="s1">
+    <div class="section-eyebrow">01 — The missing mechanism</div>
+    <h2 class="section-title">Why memory needs<br><em>a container</em></h2>
+    <p>A <strong>thread</strong> is the boundary of the living context window of an agent. Memory is its persisted context, stored in vectorized and indexed form. It is centred on one meaningful conversation among user, system (tools), and agent. As the conversation grows, so does the thread's state machine and context window, until at some point it requires summarisation and reduction so the underlying language model can continue to process reasoning calls effectively. A thread carries a permanent identifier, which makes it addressable, resumable, and attributable across its entire lifecycle. These are not implementation details. They are what transform a list of messages into a unit of memory production.</p>
+
+    <p>Most products treat the thread as a passive container: messages accumulate, the context window fills, and eventually the conversation disappears into a scrollable history that no system reads again. The memory architecture described in Paper 1 cannot be built on this foundation. You cannot extract episodic value from a conversation that never had a clear sign of closure, and you cannot distil semantic knowledge from interactions that never reached semantic completion.</p>
+
+    <div class="pull-quote">
+      <p>A thread without a governed beginning is a conversation that doesn't know what it's for. A thread without a governed end is institutional knowledge that was never collected.</p>
+    </div>
+
+    <p>This paper introduces two mechanisms — <strong>Governed Conversation Initiation (GCI)</strong> and <strong>Governed Conversation Termination (GCT)</strong> — that together give a thread the structure it needs to become a memory-producing unit. GCI gives the thread purpose before the first message is sent. GCT gives it a deliberate ending that triggers the memory pipeline. Between them, the thread becomes a first-class architectural primitive rather than an incidental by-product of a chat interface.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S2 -->
+  <section class="section" id="s2">
+    <div class="section-eyebrow">02 — The thread</div>
+    <h2 class="section-title">A flow state machine,<br><em>not a chat log</em></h2>
+    <p>A thread is a <strong>stateful unit with a defined flow</strong> — an identity, a lifecycle of transitions, and a memory pipeline attached to its terminal state. Every conversation an agent has belongs to a thread. Every thread moves through a defined sequence of states via explicit transitions. Those transitions are not cosmetic — they carry information. The move to Active means intent is established. The move to Closed means a unit of work is complete and value is ready to harvest.</p>
+
+    <div class="flow-diagram">
+      <div class="flow-diagram-title">Thread lifecycle — flow state machine</div>
+      <div class="flow-track">
+
+        <div class="flow-node">
+          <div class="flow-state fs-open">
+            <span class="flow-state-name">Open</span>
+            <span class="flow-state-sub">GCI fires here</span>
+          </div>
+          <div class="flow-desc">Goal, context, and scope established. Prior memory injected. Thread identity stamped.</div>
+        </div>
+
+        <div class="flow-arrow-col">
+          <div class="flow-stem"></div>
+          <div class="flow-label">goal confirmed</div>
+          <div class="flow-arrow-icon">▼</div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-state fs-active">
+            <span class="flow-state-name">Active</span>
+            <span class="flow-state-sub">Living context</span>
+          </div>
+          <div class="flow-desc">Conversational loop. Messages, tool calls, decisions, and open questions accumulate in the context window.</div>
+        </div>
+
+        <div class="flow-arrow-col">
+          <div class="flow-stem"></div>
+          <div class="flow-label">token threshold reached</div>
+          <div class="flow-arrow-icon">▼</div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-state fs-compact">
+            <span class="flow-state-name">Compacting</span>
+            <span class="flow-state-sub">Auto-triggered</span>
+          </div>
+          <div class="flow-desc">Structured reduction — semantics preserved, tokens reduced. Returns to Active without user interruption.</div>
+        </div>
+
+        <div class="flow-arrow-col">
+          <div class="flow-stem"></div>
+          <div class="flow-label">awaiting approval or input</div>
+          <div class="flow-arrow-icon">▼</div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-state fs-suspend">
+            <span class="flow-state-name">Suspended</span>
+            <span class="flow-state-sub">HITL / async wait</span>
+          </div>
+          <div class="flow-desc">Full state checkpointed. Resumes from exact pause point when input arrives.</div>
+        </div>
+
+        <div class="flow-arrow-col">
+          <div class="flow-stem"></div>
+          <div class="flow-label">goal met · agent proposes · user signals · idle</div>
+          <div class="flow-arrow-icon">▼</div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-state fs-closed">
+            <span class="flow-state-name">Closed</span>
+            <span class="flow-state-sub">GCT fires here</span>
+          </div>
+          <div class="flow-desc">Memory pipeline fires: episodic persistence and semantic distillation. User-initiated close carries elevated reward signal.</div>
+        </div>
+
+        <div class="flow-arrow-col">
+          <div class="flow-stem"></div>
+          <div class="flow-label">if use case requires</div>
+          <div class="flow-arrow-icon">▼</div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-state fs-reopen">
+            <span class="flow-state-name">Reopened</span>
+            <span class="flow-state-sub">→ back to Open</span>
+          </div>
+          <div class="flow-desc">Prior state injected as opening context. Original episodic record preserved. Thread re-enters Open with inherited goal and decisions.</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S3 -->
+  <section class="section" id="s3">
+    <div class="section-eyebrow">03 — GCI</div>
+    <h2 class="section-title">Governed Conversation<br><em>Initiation</em></h2>
+    <p>An agent that opens with a blank chatbox signals unlimited capability — no frame, no goal, no context — leaving users with no basis for calibrating expectations, and producing either paralysis or misuse. Hint text patches the symptom. <strong>Governed Conversation Initiation</strong> addresses the cause: it is the design layer that establishes the frame for a thread before the first user message is sent. Not a form, not onboarding — a lightweight, purposeful gesture that gives the agent structured intent from turn one. GCI produces three things the thread needs at open: a <em>goal</em> (what this conversation should accomplish), a <em>context</em> (what prior knowledge to inject), and a <em>scope</em> (what kind of work this is).</p>
+
+    <p>GCI must calibrate to the user, not impose a fixed weight of scaffolding on everyone: the two users below need very different things from the same initiation step.</p>
+
+    <div class="compare-grid-2">
+      <div class="compare-col hi-gci">
+        <div class="compare-col-label">Novice user</div>
+        <div class="compare-col-title">Needs orientation</div>
+        <ul>
+          <li>Does not know what the agent can do or how to frame a request</li>
+          <li>Benefits from suggested thread archetypes drawn from real capabilities</li>
+          <li>Prior context injection surfaces relevant history they may not think to retrieve</li>
+          <li>Goal clarification on turn one prevents early misdirection</li>
+        </ul>
+        <div class="compare-verdict">GCI principle: scaffold the intent, reduce ambiguity early</div>
+      </div>
+      <div class="compare-col hi-gct">
+        <div class="compare-col-label">Expert user</div>
+        <div class="compare-col-title">Needs to start fast</div>
+        <ul>
+          <li>Knows exactly what they want and wants zero friction before the first message</li>
+          <li>A direct typed goal satisfies GCI in one gesture — no templates needed</li>
+          <li>Memory injection can be automatic and silent rather than prompted</li>
+          <li>Goal clarification turn feels patronising — skip it when intent is clear</li>
+        </ul>
+        <div class="compare-verdict">GCI principle: get out of the way, trust stated intent</div>
+      </div>
+    </div>
+
+    <p>Both users benefit from GCI, but the weight of its scaffolding should be inversely proportional to the clarity of the user's intent. The UX implementation of that calibration is territory for designers. The principle is fixed: every thread needs a goal, a context, and a scope before the agent begins the very first reasoning loop. How visibly that is established is a design variable, not a design question.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S4 -->
+  <section class="section" id="s4">
+    <div class="section-eyebrow">04 — GCT</div>
+    <h2 class="section-title">Governed Conversation<br><em>Termination</em></h2>
+    <p>GCT is the less familiar half of the pair. Most deployments have not needed to think about it yet: threads accumulate, users move on, and the conversation is left behind — unread, unfiled, forgotten. Every thread that ends this way is a decision or a resolved question the organisation will have to rediscover from scratch next time.</p>
+
+    <p>A close button is the straightforward UX answer, and it is the right one for user-initiated close. But it is only half the picture. A user who deliberately chooses to close a thread is doing something meaningful: they are affirming that a unit of work is complete. That explicit signal is high-quality data — a reward signal, in reinforcement learning terms. Threads closed with user intent should carry more epistemic weight in memory than threads that simply went idle. The other half is agent-proposed close: the agent reasons over the conversation's context and its own capability to infer that a thread is likely done, then surfaces that inference as a human-in-the-loop check.</p>
+
+    <p>The practical answer is not to choose between agent-proposed and user-initiated close — it is to design both, understand what each produces, and let context determine which fires.</p>
+
+    <div class="pull-quote">
+      <p>Humans need closure. Bluma Zeigarnik showed in 1927 that incomplete tasks occupy our minds disproportionately. The relief of turning a page is not metaphorical. It is cognitive. A thread that closes well earns that relief.</p>
+    </div>
+
+    <div class="compare-grid-2">
+      <div class="compare-col hi-gci">
+        <div class="compare-col-label">Contextual close</div>
+        <div class="compare-col-title">Agent-proposed, HITL confirmed</div>
+        <ul>
+          <li>Agent detects goal resolution, natural conversation conclusion, or domain shift and proposes close</li>
+          <li>Idle-close policy catches threads that were quietly abandoned</li>
+          <li>Human-in-the-loop confirmation required before memory pipeline fires — agent proposes, user or system approves</li>
+          <li>Reduces cognitive burden on user; closure happens without explicit action</li>
+        </ul>
+        <div class="compare-verdict">Memory signal: moderate confidence — inferred completion</div>
+      </div>
+      <div class="compare-col hi-gct">
+        <div class="compare-col-label">User-initiated close</div>
+        <div class="compare-col-title">Explicit, intentional signal</div>
+        <ul>
+          <li>User actively affirms the thread is complete — the highest-quality termination signal available</li>
+          <li>Equivalent to a reward signal in RL: explicit human confirmation that this unit of work succeeded</li>
+          <li>Threads closed this way should carry elevated weight in episodic retrieval and semantic distillation priority</li>
+          <li>Design must make close feel like preserving, not discarding — the close receipt is the critical mechanism</li>
+        </ul>
+        <div class="compare-verdict">Memory signal: high confidence — explicit human reward</div>
+      </div>
+    </div>
+
+    <p>The specific UX patterns that implement these two modes — how the agent proposes close, what the close receipt looks like, how continuation is offered — are design territory. What is fixed is that closure is what fires the memory pipeline, covered next.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S5 -->
+  <section class="section" id="s5">
+    <div class="section-eyebrow">05 — The memory pipeline</div>
+    <h2 class="section-title">What fires<br><em>on close</em></h2>
+    <p>When a thread closes — whether by agent proposal, user confirmation, or idle-close policy — GCT triggers the two-stage process below, converting the thread's conversational value into the structured memory stores described in Paper 1. This pipeline is the operational link between the thread and the three-tier memory architecture: without it, a closed thread's decisions and context are discarded rather than written to the episodic and semantic stores.</p>
+
+    <div class="pipeline">
+      <div class="pipeline-title">The GCT memory pipeline</div>
+      <div class="pipeline-steps">
+        <div class="pipeline-step">
+          <div class="pipeline-step-num">01</div>
+          <div>
+            <div class="pipeline-step-title"><span class="p-tag gct">GCT</span> Close confirmed — metadata stamped</div>
+            <div class="pipeline-step-desc">Thread ID, resource ID, goal label, timestamp, and close mode (agent-proposed, user-initiated, or idle) are stamped. Close mode travels as a confidence weight through every downstream step.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-num">02</div>
+          <div>
+            <div class="pipeline-step-title"><span class="p-tag ep">Episodic</span> Vectorise and persist</div>
+            <div class="pipeline-step-desc">Thread structured state is vectorised and written to the episodic store scoped to the owning resource. Full message history archived as historical chat — readable, auditable, available for reopen.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-num">03</div>
+          <div>
+            <div class="pipeline-step-title"><span class="p-tag usr">User signal</span> Reward weighting applied</div>
+            <div class="pipeline-step-desc">User-initiated close is an explicit reward signal. It elevates the thread's retrieval rank in episodic similarity search, prioritises its content in the semantic distillation queue, and fast-tracks decisions and patterns for human review.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-num">04</div>
+          <div>
+            <div class="pipeline-step-title"><span class="p-tag sem">Semantic</span> Cleanroom distillation</div>
+            <div class="pipeline-step-desc">Asynchronous pass strips org-, user-, and context-specific content. Survivors — validated facts, resolved patterns, reusable procedures — are written to the semantic store. User-signalled threads enter this queue first. Governance required: human gate for significant promotions.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="pipeline-step-num">05</div>
+          <div>
+            <div class="pipeline-step-title"><span class="p-tag gct">GCT</span> Close receipt surfaced</div>
+            <div class="pipeline-step-desc">Decisions preserved, open questions carried forward, memory contributions listed. The receipt makes the pipeline's output visible — closing feels like completion, not disappearance.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p>The cleanroom step deserves particular care because it is where the most organisational value is created, and where the most risk lives. Unchecked, it can poison the semantic store with context-specific decisions that appear general, or encode one user's preferences as policy. The governance layer from Paper 1 applies directly here: human gate for significant promotions, controlled write access, regular drift detection. The cleanroom is fundamentally a governance problem, not a technical one — it just happens to need a technical implementation.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S6 -->
+  <section class="section" id="s6">
+    <div class="section-eyebrow">06 — Reopen and branch</div>
+    <h2 class="section-title">Continuing where<br><em>you left off</em></h2>
+    <p>Closing a thread does not mean abandoning its work. Returning to a topic — a research thread that produced a first draft, a decision thread whose context is needed for a follow-on task — is one of the most common patterns in real agent usage. GCT is designed with this in mind. A closed thread is preserved, not destroyed. Reopening is a defined state machine transition, and it requires deliberate context window management rather than naive history replay.</p>
+
+    <div class="compare-grid-3">
+      <div class="compare-col">
+        <div class="compare-col-label">Minimal reopen</div>
+        <div class="compare-col-title">Structured state snapshot</div>
+        <ul>
+          <li>Inject goal, decisions, open questions from closed thread's state</li>
+          <li>Add last N verbatim messages as immediate context</li>
+          <li>Agent resumes without replaying full history</li>
+        </ul>
+        <div class="compare-verdict">Best for: resuming a paused task quickly</div>
+      </div>
+      <div class="compare-col">
+        <div class="compare-col-label">Summary reopen</div>
+        <div class="compare-col-title">Generated resume document</div>
+        <ul>
+          <li>Generate structured resume from episodic record</li>
+          <li>What was achieved, what remains open, key decisions</li>
+          <li>Becomes opening system context of the new session</li>
+        </ul>
+        <div class="compare-verdict">Best for: returning after a long gap</div>
+      </div>
+      <div class="compare-col highlight">
+        <div class="compare-col-label">Selective reopen</div>
+        <div class="compare-col-title">On-demand retrieval</div>
+        <ul>
+          <li>Thread history queried by similarity to current user turn</li>
+          <li>Relevant prior context surfaces as needed, not all at once</li>
+          <li>Agent continues as if context were always available</li>
+        </ul>
+        <div class="compare-verdict">Best for: long, complex threads with many topics</div>
+      </div>
+    </div>
+
+    <div class="foundations" style="margin-top:32px;">
+      <div class="foundations-icon">Future work</div>
+      <div class="foundations-body">Two open problems in thread architecture that fall outside the scope of this paper but warrant explicit acknowledgement.
+        <div class="foundations-refs">
+          <div class="foundations-ref"><strong>Tree-based thread architecture</strong> — beyond simple reopen, the thread model supports branching: a thread with a rich shared context can be split into parallel child threads, each inheriting the parent's structured state and closing independently to trigger its own memory pipeline, with episodic records merged back into the parent or left standalone. This is thread-as-tree rather than thread-as-line, the direct practical application of the DAG-based contextual memory virtualisation model (Santoni, 2026) cited in the Foundations. The model raises unresolved design questions: how are child thread episodic records merged back into a parent without context collision? How are conflicting decisions across branches reconciled before semantic promotion? How does the reopen state machine handle a thread with multiple closed children? These are active design problems, not solved ones.</div>
+          <div class="foundations-ref"><strong>Context window drift</strong> — a thread opened months ago carried assumptions about the world — market conditions, org structure, a codebase state, a policy — that may no longer hold. The context window was accurate at open; it becomes stale through time even without new messages. This is distinct from context window size management: it is a validity problem. Reopened threads in particular must address whether inherited context should be validated against current memory stores before reasoning resumes. No framework currently handles this systematically.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S7 -->
+  <section class="section" id="s7">
+    <div class="section-eyebrow">07 — Implications</div>
+    <h2 class="section-title">Strategic implications</h2>
+    <p>GCI and GCT determine whether the memory architecture from Paper 1 actually accumulates anything. The principles below follow directly from the framework developed across both papers in this series.</p>
+
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-icon">P1</div>
+        <div>
+          <div class="principle-title">Design GCI before you design the chat interface</div>
+          <div class="principle-body">The blank chatbox forecloses memory before the first message is sent. Decide how the thread will be initiated — its goal, injected context, and scope — before choosing a chat UI. GCI can be as minimal as a single agent behaviour on turn one, but it must be deliberate and calibrated to the user's level of intent, not uniform for everyone.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P2</div>
+        <div>
+          <div class="principle-title">Design both close modes — they produce different memory signal quality</div>
+          <div class="principle-body">Agent-proposed and user-initiated close are complementary, not alternatives. Build agent-proposed close as the default, friction-reducing path; build user-initiated close as a deliberate contribution act with a visible close receipt; treat idle-close as the safety net. Weight them differently in the memory pipeline — user close is a reward signal, not just a termination event.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P3</div>
+        <div>
+          <div class="principle-title">Make the memory pipeline visible through the close receipt</div>
+          <div class="principle-body">A silent memory pipeline gives users no evidence it did anything, and no incentive to close deliberately. The close receipt makes that output tangible, and builds the trust that drives future user-initiated closes — "the agent remembered what I decided" only lands if the user knows that closing the thread is what made it possible.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P4</div>
+        <div>
+          <div class="principle-title">Govern the cleanroom — it is the most consequential step</div>
+          <div class="principle-body">The episodic-to-semantic distillation pass turns thread-level knowledge into organisational knowledge — and is where errors compound, private context leaks into shared stores, or one user's pattern gets encoded as policy. Apply Paper 1's governance principles here: human gate for significant promotions, controlled write access, regular drift detection. Prioritise user-signalled threads in the queue — their higher confidence makes them the safest candidates for promotion.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P5</div>
+        <div>
+          <div class="principle-title">Thread quality determines memory quality — upstream</div>
+          <div class="principle-body">Memory quality is capped by thread quality: a thread without a stated goal produces unclear episodic records, one that compacted poorly loses its decisions, one never closed produces nothing. GCI and GCT are upstream investments — the data-hygiene equivalent for memory architecture — so invest in them before the memory layer accumulates noise, not after.</div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="paper-footer">
+    <div class="paper-footer-note">Draft 1.7 · Agent intelligence series · Paper 2</div>
+    <div class="paper-footer-note">Memory → GCI → Thread → GCT → Memory</div>
+  </div>
+
+</div>
+</body>
+</html>

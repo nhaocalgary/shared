@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Memory: Explained</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1917; --ink-mid: #4a4845; --ink-light: #8a8880;
+    --page: #f7f6f3; --surface: #ffffff; --rule: #e2e0da;
+    --consumer: #0F6E56; --consumer-bg: #E1F5EE; --consumer-mid: #1D9E75;
+    --coding: #993C1D; --coding-bg: #FAECE7; --coding-mid: #D85A30;
+    --stage1: #5F5E5A; --stage1-bg: #F1EFE8;
+    --stage2: #0F6E56; --stage2-bg: #E1F5EE;
+    --stage3: #534AB7; --stage3-bg: #EEEDFE;
+    --accent: #534AB7; --accent-bg: #EEEDFE;
+    --radius-sm: 4px; --radius: 8px; --radius-lg: 14px;
+    --sans: 'Inter', system-ui, sans-serif;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--sans); background: var(--page); color: var(--ink); line-height: 1.75; }
+
+  /* COVER */
+  .cover { background: var(--ink); color: var(--page); padding: 80px 60px 72px; position: relative; overflow: hidden; }
+  .cover::before { content:''; position:absolute; top:-120px; right:-80px; width:480px; height:480px; border-radius:50%; border:1px solid rgba(255,255,255,0.07); }
+  .cover::after  { content:''; position:absolute; top:-40px;  right:60px;  width:280px; height:280px; border-radius:50%; border:1px solid rgba(255,255,255,0.05); }
+  .cover-eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:28px; }
+  .cover-title { font-family:var(--serif); font-size:clamp(36px,5vw,58px); line-height:1.08; font-weight:400; max-width:680px; margin-bottom:20px; }
+  .cover-title em { font-style:italic; color:rgba(255,255,255,0.5); }
+  .cover-subtitle { font-size:15px; font-weight:300; color:rgba(255,255,255,0.55); max-width:520px; line-height:1.6; margin-bottom:56px; }
+  .cover-meta { display:flex; gap:40px; flex-wrap:wrap; border-top:1px solid rgba(255,255,255,0.1); padding-top:28px; }
+  .cover-meta-item { display:flex; flex-direction:column; gap:4px; }
+  .cover-meta-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.3); }
+  .cover-meta-value { font-size:13px; font-weight:500; color:rgba(255,255,255,0.7); }
+
+  /* LAYOUT */
+  .paper { max-width:860px; margin:0 auto; padding:0 40px 100px; }
+
+  /* TOC */
+  .toc { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-lg); padding:32px 36px; margin:48px 0; }
+  .toc-title { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-light); margin-bottom:20px; }
+  .toc-list { list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .toc-list li { display:flex; align-items:baseline; gap:12px; }
+  .toc-num { font-family:var(--mono); font-size:11px; color:var(--ink-light); min-width:20px; }
+  .toc-list a { font-size:14px; font-weight:500; color:var(--ink); text-decoration:none; border-bottom:1px solid transparent; transition:border-color 0.15s, color 0.15s; }
+  .toc-list a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* SECTIONS */
+  .section { margin:60px 0; }
+  .section-eyebrow { font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-light); margin-bottom:12px; }
+  .section-title { font-family:var(--serif); font-size:clamp(24px,3.5vw,34px); font-weight:400; line-height:1.2; color:var(--ink); margin-bottom:24px; }
+  .section-title em { font-style:italic; color:var(--ink-mid); }
+  .rule { border:none; border-top:1px solid var(--rule); margin:48px 0; }
+  p { font-size:15px; line-height:1.8; color:var(--ink-mid); margin-bottom:18px; }
+  p:last-child { margin-bottom:0; }
+  p strong { color:var(--ink); font-weight:600; }
+
+  /* PULL QUOTE */
+  .pull-quote { border-left:3px solid var(--accent); padding:20px 28px; margin:36px 0; background:var(--accent-bg); border-radius:0 var(--radius) var(--radius) 0; }
+  .pull-quote p { font-family:var(--serif); font-size:18px; line-height:1.55; color:var(--ink); font-weight:400; margin:0; }
+
+  /* COMPARE GRID */
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:2px; background:var(--rule); border-radius:var(--radius-lg); overflow:hidden; margin:32px 0; }
+  .compare-col { background:var(--surface); padding:28px 24px; }
+  .compare-col.highlight { background:var(--accent-bg); }
+  .compare-col-label { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-light); margin-bottom:10px; }
+  .compare-col-title { font-size:15px; font-weight:600; color:var(--ink); margin-bottom:16px; }
+  .compare-col.highlight .compare-col-title { color:var(--accent); }
+  .compare-col ul { list-style:none; display:flex; flex-direction:column; gap:8px; }
+  .compare-col ul li { font-size:13px; color:var(--ink-mid); line-height:1.5; padding-left:14px; position:relative; }
+  .compare-col ul li::before { content:'·'; position:absolute; left:2px; color:var(--ink-light); }
+  .compare-col.highlight ul li::before { color:var(--accent); }
+  .compare-verdict { margin-top:16px; padding-top:14px; border-top:1px solid var(--rule); font-size:11px; font-weight:500; color:var(--ink-light); font-family:var(--mono); text-transform:uppercase; letter-spacing:0.08em; }
+  .compare-col.highlight .compare-verdict { color:var(--accent); }
+
+  /* TIER CARDS */
+  .tier-grid { display:flex; flex-direction:column; gap:2px; margin:32px 0; }
+  .tier-card { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); padding:28px 32px; display:grid; grid-template-columns:180px 1fr; gap:32px; align-items:start; }
+  .tier-tag { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:4px 10px; border-radius:20px; margin-bottom:10px; }
+  .tier-ep  .tier-tag  { background:#F1EFE8; color:#5F5E5A; }
+  .tier-sem .tier-tag  { background:var(--accent-bg); color:var(--accent); }
+  .tier-proc .tier-tag { background:#FAEEDA; color:#854F0B; }
+  .tier-name { font-family:var(--serif); font-size:22px; font-weight:400; line-height:1.2; color:var(--ink); margin-bottom:4px; }
+  .tier-subtitle { font-size:12px; color:var(--ink-light); font-style:italic; }
+  .tier-body p { font-size:14px; margin-bottom:12px; }
+  .tier-agents { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; }
+  .agent-pill { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--radius); font-size:12px; line-height:1.4; }
+  .agent-pill.consumer { background:var(--consumer-bg); border:1px solid #9FE1CB; }
+  .agent-pill.coding   { background:var(--coding-bg);   border:1px solid #F5C4B3; }
+  .agent-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .consumer .agent-dot { background:var(--consumer); }
+  .coding   .agent-dot { background:var(--coding); }
+  .agent-pill-label { font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; margin-right:2px; }
+  .consumer .agent-pill-label { color:var(--consumer); }
+  .coding   .agent-pill-label { color:var(--coding); }
+  .agent-pill-text { color:var(--ink-mid); font-size:12px; }
+
+  /* MATRIX */
+  .matrix-wrap { margin:36px 0; overflow-x:auto; }
+  .matrix-legend { display:flex; gap:24px; margin-bottom:16px; align-items:center; }
+  .matrix-legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-mid); }
+  .legend-dot { width:10px; height:10px; border-radius:50%; }
+  .matrix { width:100%; border-collapse:separate; border-spacing:2px; min-width:640px; }
+  .matrix th { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:500; padding:10px 16px; text-align:left; border-radius:var(--radius-sm); }
+  .matrix th.tier-head { background:transparent; color:var(--ink-light); width:140px; }
+  .matrix th.s1 { background:var(--stage1-bg); color:var(--stage1); }
+  .matrix th.s2 { background:var(--stage2-bg); color:var(--stage2); }
+  .matrix th.s3 { background:var(--stage3-bg); color:var(--stage3); }
+  .matrix td { background:var(--surface); padding:16px 18px; vertical-align:top; border-radius:var(--radius-sm); font-size:13px; }
+  .matrix td.tier-cell { background:var(--page); font-weight:600; font-size:13px; color:var(--ink); }
+  .matrix td.tier-cell span { display:block; font-weight:400; font-size:11px; color:var(--ink-light); margin-top:2px; font-style:italic; }
+  .matrix td.s2-cell { background:#f0fbf6; }
+  .matrix td.s3-cell { background:#f4f3fe; }
+  .m-consumer, .m-coding { display:flex; align-items:flex-start; gap:6px; margin-bottom:8px; line-height:1.45; }
+  .m-consumer:last-of-type, .m-coding:last-of-type { margin-bottom:0; }
+  .m-tag { flex-shrink:0; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:2px 6px; border-radius:3px; margin-top:2px; }
+  .m-consumer .m-tag { background:var(--consumer-bg); color:var(--consumer); }
+  .m-coding   .m-tag { background:var(--coding-bg);   color:var(--coding); }
+  .m-text { color:var(--ink-mid); font-size:12px; }
+  .m-footnote { margin-top:10px; padding-top:8px; border-top:1px solid var(--rule); font-size:10px; font-style:italic; color:var(--ink-light); }
+
+  /* AGENT ARCHETYPE CARDS */
+  .archetype-grid { display:grid; grid-template-columns:1fr 1fr; gap:2px; margin:32px 0; }
+  .archetype-card { padding:32px 28px; border-radius:var(--radius-lg); }
+  .archetype-card.consumer { background:var(--consumer-bg); border:1px solid #9FE1CB; }
+  .archetype-card.coding   { background:var(--coding-bg);   border:1px solid #F5C4B3; }
+  .archetype-badge { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+  .archetype-badge-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .archetype-card.consumer .archetype-badge-dot { background:var(--consumer); }
+  .archetype-card.coding   .archetype-badge-dot { background:var(--coding); }
+  .archetype-badge-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:600; }
+  .archetype-card.consumer .archetype-badge-label { color:var(--consumer); }
+  .archetype-card.coding   .archetype-badge-label { color:var(--coding); }
+  .archetype-title { font-family:var(--serif); font-size:20px; font-weight:400; color:var(--ink); margin-bottom:12px; }
+  .archetype-desc { font-size:13px; color:var(--ink-mid); line-height:1.7; margin-bottom:20px; }
+  .archetype-tiers { display:flex; flex-direction:column; gap:8px; }
+  .archetype-tier { font-size:12px; color:var(--ink-mid); }
+  .archetype-card.consumer .archetype-tier strong { color:var(--consumer); }
+  .archetype-card.coding   .archetype-tier strong { color:var(--coding); }
+
+  /* FLYWHEEL */
+  .flywheel { background:var(--ink); border-radius:var(--radius-lg); padding:40px; margin:36px 0; }
+  .flywheel-title { font-family:var(--serif); font-size:20px; font-weight:400; color:rgba(255,255,255,0.9); margin-bottom:28px; }
+  .flywheel-steps { display:flex; flex-direction:column; }
+  .flywheel-step { display:flex; gap:20px; align-items:flex-start; padding:16px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .flywheel-step:last-child { border-bottom:none; }
+  .flywheel-step-num { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:rgba(255,255,255,0.25); min-width:24px; padding-top:3px; }
+  .flywheel-step-title { font-size:14px; font-weight:600; color:rgba(255,255,255,0.85); margin-bottom:4px; }
+  .flywheel-step-desc { font-size:13px; color:rgba(255,255,255,0.5); line-height:1.6; }
+  .fw-tag { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:2px 7px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  .fw-tag.c { background:rgba(29,158,117,0.2); color:#5DCAA5; }
+  .fw-tag.k { background:rgba(216,90,48,0.2);  color:#F0997B; }
+
+  /* PRINCIPLES */
+  .principles { display:flex; flex-direction:column; gap:2px; margin:32px 0; }
+  .principle { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius); padding:24px 28px; display:flex; gap:24px; align-items:flex-start; }
+  .principle-icon { font-family:var(--mono); font-size:13px; color:var(--accent); min-width:28px; padding-top:2px; }
+  .principle-title { font-size:14px; font-weight:600; color:var(--ink); margin-bottom:6px; }
+  .principle-body { font-size:13px; color:var(--ink-mid); line-height:1.65; }
+
+  /* BOARD SUMMARY */
+  .board-summary { background:var(--navy); border:1px solid var(--amber); border-radius:var(--radius-lg); padding:32px 36px; margin:48px 0 32px; }
+  .board-summary-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .board-summary-label { font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); font-weight:600; }
+  .board-summary-read { font-family:var(--mono); font-size:10px; color:var(--slate); letter-spacing:0.08em; }
+  .board-summary-intro { font-size:15px; color:var(--mist); line-height:1.7; margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid var(--navy3); }
+  .board-summary-intro strong { color:var(--white); }
+  .board-purposes { display:flex; flex-direction:column; gap:0; }
+  .board-purpose { display:flex; gap:24px; padding:18px 0; border-bottom:1px solid var(--navy3); }
+  .board-purpose:last-child { border-bottom:none; padding-bottom:0; }
+  .board-purpose-icon { font-family:var(--display); font-size:28px; color:var(--navy3); line-height:1; min-width:36px; padding-top:2px; font-style:italic; }
+  .board-purpose-title { font-size:14px; font-weight:600; color:var(--white); margin-bottom:6px; }
+  .board-purpose-body { font-size:13px; color:var(--slate); line-height:1.65; }
+
+  /* FOUNDATIONS CALLOUT */
+  .foundations { background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius-lg); padding:24px 28px; margin:0 0 48px; display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:start; }
+  .foundations-icon { font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); padding-top:2px; white-space:nowrap; }
+  .foundations-body { font-size:13px; color:var(--ink-mid); line-height:1.7; }
+  .foundations-body strong { color:var(--ink); font-weight:600; }
+  .foundations-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent); }
+  .foundations-refs { display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--rule); }
+  .foundations-ref { font-size:12px; color:var(--ink-light); font-style:italic; }
+
+  /* FOOTER */
+  .paper-footer { border-top:1px solid var(--rule); padding-top:32px; margin-top:80px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+  .paper-footer-note { font-family:var(--mono); font-size:10px; color:var(--ink-light); letter-spacing:0.06em; }
+
+  @media (max-width:640px) {
+    .cover { padding:48px 28px 52px; }
+    .paper { padding:0 20px 60px; }
+    .tier-card { grid-template-columns:1fr; gap:16px; }
+    .compare-grid { grid-template-columns:1fr; }
+    .archetype-grid { grid-template-columns:1fr; }
+    .cover-meta { gap:24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-eyebrow">Strategy Paper · Agent Architecture</div>
+  <h1 class="cover-title">Agent Memory:<br><em>Explained</em></h1>
+  <p class="cover-subtitle">An agent is an autonomous system built on a foundation model and domain tools. This paper illustrates why, without a third layer — memory — even the most capable agent accumulates no institutional knowledge across interactions, and how a structured memory architecture turns agent deployments into compounding institutional assets.</p>
+</div>
+
+<div class="paper">
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <ol class="toc-list">
+      <li><span class="toc-num">01</span><a href="#s1">The capability ceiling — why tools alone aren't enough</a></li>
+      <li><span class="toc-num">02</span><a href="#s2">A memory architecture for agents</a></li>
+      <li><span class="toc-num">03</span><a href="#s3">Two agent archetypes</a></li>
+      <li><span class="toc-num">04</span><a href="#s4">The maturity ladder — Assist, Embed, Evolve</a></li>
+      <li><span class="toc-num">05</span><a href="#s5">When memory goes wrong — and how to prevent it</a></li>
+      <li><span class="toc-num">06</span><a href="#s6">Strategic implications</a></li>
+    </ol>
+  </nav>
+
+  <!-- FOUNDATIONS -->
+  <div class="foundations">
+    <div class="foundations-icon">Foundations</div>
+    <div class="foundations-body">
+      The three-tier memory model — episodic, semantic, procedural — originates in cognitive science (Tulving, 1972; Squire, 1987) and was formalised for AI agents in the CoALA framework (Sumers, Yao, Narasimhan &amp; Griffiths, TMLR 2024), now the canonical academic reference in this space. The taxonomy is now implemented across a range of production frameworks — among them LangChain's LangMem SDK, Mem0, and Letta (the production evolution of the MemGPT research project) — each with different architectural trade-offs but converging on the same three-layer model. This paper's contribution is not the taxonomy itself — it is the application of that taxonomy to two specific enterprise agent archetypes, their interdependency, and the maturity ladder that maps memory investment to organisational adoption stage.
+      <div class="foundations-refs">
+        <div class="foundations-ref">Sumers et al. — Cognitive Architectures for Language Agents (CoALA), TMLR 2024 · arXiv:2309.02427</div>
+        <div class="foundations-ref">Tulving, E. — Episodic and Semantic Memory, 1972 · in Organisation of Memory, Academic Press</div>
+        <div class="foundations-ref">Production implementations: LangMem (LangChain, 2025) · Mem0 (arXiv:2504.19413, ECAI 2025) · Letta / MemGPT · and others</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S1 -->
+  <section class="section" id="s1">
+    <div class="section-eyebrow">01 — The problem</div>
+    <h2 class="section-title">The capability ceiling —<br><em>why tools alone aren't enough</em></h2>
+    <p>A capable agent deployed today will be equally capable — and equally ignorant — six months from now. It will have handled thousands of interactions, sat inside dozens of workflows, watched your teams navigate decisions that took real judgement. None of that will have changed it. Ask it a question on day one and day two hundred, and it arrives at both from the same blank starting position. The throughput accumulates. The knowledge does not.</p>
+    <p>This is not a flaw in the underlying model. It is a gap in how agents are designed. Most deployments are built on two layers — language intelligence and domain tools — and stop there. The third layer, the one that turns a capable system into an asset that learns from its own deployment, is missing.</p>
+    <div class="compare-grid">
+      <div class="compare-col">
+        <div class="compare-col-label">Layer 1</div>
+        <div class="compare-col-title">LLM reasoning</div>
+        <ul>
+          <li>General language understanding</li>
+          <li>In-context reasoning and synthesis</li>
+          <li>Capable, any domain, any question</li>
+        </ul>
+        <div class="compare-verdict">Capable reasoning, any domain, any question</div>
+      </div>
+      <div class="compare-col">
+        <div class="compare-col-label">Layer 2</div>
+        <div class="compare-col-title">Tools</div>
+        <ul>
+          <li>Access to live data and APIs</li>
+          <li>Domain-specific calculations</li>
+          <li>Connection to your systems</li>
+        </ul>
+        <div class="compare-verdict">Extends reach — live data, systems, domain calculations</div>
+      </div>
+      <div class="compare-col highlight">
+        <div class="compare-col-label">Layer 3 — missing</div>
+        <div class="compare-col-title">Memory</div>
+        <ul>
+          <li>Context of what has happened before</li>
+          <li>Accumulated knowledge of your domain</li>
+          <li>Refined ways of working over time</li>
+        </ul>
+        <div class="compare-verdict">Compounds — institutional asset</div>
+      </div>
+    </div>
+    <div class="pull-quote">
+      <p>Throughput is not the same as learning. An agent that processes a thousand interactions and retains nothing from them stays as a beginner — indefinitely.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S2 -->
+  <section class="section" id="s2">
+    <div class="section-eyebrow">02 — The architecture</div>
+    <h2 class="section-title">A memory architecture <em>for agents</em></h2>
+    <p>The CoALA framework (Sumers et al., TMLR 2024) — now the standard academic reference for cognitive architectures in AI agents — formalises memory across three distinct substrates, each with a different function and a different update rhythm. A range of production frameworks have since operationalised the same taxonomy: LangMem via LangGraph, Mem0 via a dual vector-and-graph store, Letta through agent-managed tiered memory, and others. The taxonomy is settled. What remains underexplored is how these three layers map differently onto different types of agent, and how an organisation should sequence investment across them as deployment matures. That is the work this section begins.</p>
+    <div class="tier-grid">
+      <div class="tier-card tier-ep">
+        <div class="tier-label-block">
+          <div class="tier-tag">Episodic</div>
+          <div class="tier-name">What happened</div>
+          <div class="tier-subtitle">The record of experience</div>
+        </div>
+        <div class="tier-body">
+          <p>Episodic memory is the agent's record of specific events: what was asked, what decisions were made, what outcomes followed. It is the equivalent of institutional memory in a human organisation — the collective recall of what has been tried and learned.</p>
+          <p>Without episodic memory, every interaction is context-free. The agent cannot refer back to a previous conversation, build on a prior decision, or notice that the same question has surfaced repeatedly across different users.</p>
+        </div>
+      </div>
+      <div class="tier-card tier-sem">
+        <div class="tier-label-block">
+          <div class="tier-tag">Semantic</div>
+          <div class="tier-name">What is known</div>
+          <div class="tier-subtitle">The body of knowledge</div>
+        </div>
+        <div class="tier-body">
+          <p>Semantic memory is the agent's understanding of concepts, domain knowledge, standards, and shared vocabulary. It is what the agent knows about your organisation and your domain — distinct from what it has experienced.</p>
+          <p>A well-built semantic layer means the agent speaks your language and applies knowledge consistently — surfacing the right answer not just because the model is capable, but because the knowledge base it draws on reflects your specific domain, terminology, and operating context.</p>
+        </div>
+      </div>
+      <div class="tier-card tier-proc">
+        <div class="tier-label-block">
+          <div class="tier-tag">Procedural</div>
+          <div class="tier-name">How to act</div>
+          <div class="tier-subtitle">The habits of working</div>
+        </div>
+        <div class="tier-body">
+          <p>Procedural memory is the agent's repertoire of actions: how it responds, which workflows it follows, what it does in a given situation. It is the layer closest to operational behaviour — and the one with the highest strategic ceiling.</p>
+          <p>At entry level, procedural memory is a set of rules and templates. As the organisation matures, this layer extends into workflow automation — the agent joins delivery pipelines, triggers processes, and eventually refines its own standard operating procedures based on what works. It is the layer that ladders most directly into organisational transformation.</p>
+        </div>
+      </div>
+    </div>
+    <p>These three layers are not independent. Episodic memory feeds semantic memory — recurring patterns in events become reusable facts. Semantic memory shapes procedural memory — what the agent knows governs how it acts. And procedural memory, as it matures, generates new episodes that feed the cycle again. How each layer is populated, and what it contains, depends significantly on what the agent is designed to do — which is the subject of the next section.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S3 -->
+  <section class="section" id="s3">
+    <div class="section-eyebrow">03 — The archetypes</div>
+    <h2 class="section-title">Two agent archetypes</h2>
+    <p>Most organisations approaching scaled AI deployment are, knowingly or not, building two distinct categories of agent. They have different audiences, different memory profiles, and different strategic roles.</p>
+    <div class="archetype-grid">
+      <div class="archetype-card consumer">
+        <div class="archetype-badge">
+          <div class="archetype-badge-dot"></div>
+          <span class="archetype-badge-label">Consumer agent</span>
+        </div>
+        <h3 class="archetype-title">Delivers knowledge<br>to the many</h3>
+        <p class="archetype-desc">Faces end users — employees, customers, or citizens — and surfaces the right knowledge at scale. Its value is measured by consistency, depth of context, and the degree to which it improves with use.</p>
+        <div class="archetype-tiers">
+          <div class="archetype-tier"><strong>Episodic:</strong> Scoped to the individual user — their query history, past resolutions, preferences, and gaps. Each user's journey is a distinct episode the agent carries forward across sessions.</div>
+          <div class="archetype-tier"><strong>Semantic:</strong> Scoped to the organisation's domain — product knowledge, service policies, terminology, and evolving answers to the questions users actually ask. This layer is shared across all users and grows as usage patterns reveal gaps in what the agent knows.</div>
+          <div class="archetype-tier"><strong>Procedural:</strong> Scoped to service patterns — how the agent guides, routes, escalates, and anticipates. At an early stage these are fixed response templates. As the agent matures, procedural memory encodes adaptive workflows: knowing when to hand off, how to handle an edge case, and how to pre-empt a need before it is expressed.</div>
+        </div>
+      </div>
+      <div class="archetype-card coding">
+        <div class="archetype-badge">
+          <div class="archetype-badge-dot"></div>
+          <span class="archetype-badge-label">Coding agent</span>
+        </div>
+        <h3 class="archetype-title">Accelerates teams<br>building the consumer agent</h3>
+        <p class="archetype-desc">Sits inside delivery teams and compresses the time from insight to deployed capability. Its value is measured by delivery velocity, code quality, and how effectively it carries institutional knowledge from sprint to sprint.</p>
+        <div class="archetype-tiers">
+          <div class="archetype-tier"><strong>Episodic:</strong> Scoped to the sprint or delivery iteration — architectural decisions made, approaches tried and rejected, failures encountered. Each iteration is a discrete episode the agent carries into the next, preventing repeated mistakes and compressing ramp-up time across the team.</div>
+          <div class="archetype-tier"><strong>Semantic:</strong> Scoped to the discipline of software delivery — architecture patterns, technology standards, and delivery practice, anchored on agentskills.io as a shared, evolving knowledge standard. This layer is enriched over time as the team's own practice is folded back in, eventually becoming the organisation's own codified delivery standard rather than a generic import.</div>
+          <div class="archetype-tier"><strong>Procedural:</strong> The highest-leverage layer for the coding agent. Delivery work is inherently complex — architectural trade-offs, multi-step debugging, cross-team coordination, release sequencing. Procedural memory is what allows the agent to carry standard operating procedures for these workflows, execute them with decreasing human oversight, and progressively extend its own autonomy as confidence is established. The trajectory is from assisted generation to supervised execution to autonomous delivery — each step enabled by a richer procedural layer.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S4 -->
+  <section class="section" id="s4">
+    <div class="section-eyebrow">04 — The maturity ladder</div>
+    <h2 class="section-title">Assist, Embed, <em>Evolve</em></h2>
+    <p>Memory architecture is not binary. It develops in stages, and each stage unlocks the next. Organisations that understand this ladder can sequence their investments deliberately, and build toward each stage with clarity on what it requires.</p>
+    <div class="matrix-wrap">
+      <div class="matrix-legend">
+        <div class="matrix-legend-item"><div class="legend-dot" style="background:var(--consumer);"></div> Consumer agent</div>
+        <div class="matrix-legend-item"><div class="legend-dot" style="background:var(--coding);"></div> Coding agent</div>
+      </div>
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th class="tier-head"></th>
+            <th class="s1">Stage 1 · Assist<br><span style="font-weight:400;font-size:9px;text-transform:none;letter-spacing:0;">Agent assists humans</span></th>
+            <th class="s2">Stage 2 · Embed<br><span style="font-weight:400;font-size:9px;text-transform:none;letter-spacing:0;">Agent joins workflows</span></th>
+            <th class="s3">Stage 3 · Evolve<br><span style="font-weight:400;font-size:9px;text-transform:none;letter-spacing:0;">Agent improves the org</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="tier-cell">Episodic<span>What happened</span></td>
+            <td>
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">This session's query context</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">Current sprint task log</span></div>
+            </td>
+            <td class="s2-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Patterns across sessions and users</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">Decision log across sprints</span></div>
+            </td>
+            <td class="s3-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Org-level demand signal library</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">Searchable pattern repository</span></div>
+            </td>
+          </tr>
+          <tr>
+            <td class="tier-cell">Semantic<span>What is known</span></td>
+            <td>
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Product docs loaded at deploy</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">agentskills.io v1 as static base</span></div>
+            </td>
+            <td class="s2-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">FAQ gaps filled by usage signals</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">agentskills evolves with team practice</span></div>
+            </td>
+            <td class="s3-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Cross-user knowledge graph, org-owned</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">agentskills becomes the org's own standard</span></div>
+            </td>
+          </tr>
+          <tr>
+            <td class="tier-cell">Procedural<span>How to act</span></td>
+            <td>
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Reply templates, guardrails</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">Code gen prompts, review checklists</span></div>
+              <div class="m-footnote">Basic automation</div>
+            </td>
+            <td class="s2-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Routing, escalation, handoff rules</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">CI triggers, PR review, deploy pipelines</span></div>
+              <div class="m-footnote" style="color:var(--consumer);">→ Workflow tier unlocked</div>
+            </td>
+            <td class="s3-cell">
+              <div class="m-consumer"><span class="m-tag">User</span><span class="m-text">Proactive service, anticipates needs</span></div>
+              <div class="m-coding"><span class="m-tag">Code</span><span class="m-text">agentskills SOP auto-refined by use</span></div>
+              <div class="m-footnote" style="color:var(--accent);">→ Self-improving org</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The transition from Assist to Embed is an operational decision — it requires integrating the agent into live workflows and accepting that the agent will act, not merely advise. The transition from Embed to Evolve is a governance decision — it requires trusting the agent's accumulated judgement enough to let it refine its own behaviour. Both transitions require deliberate investment in the memory layer.</p>
+    <div class="pull-quote">
+      <p>Procedural memory is the layer that ladders into workflow. Most organisations stall at Assist because they have not invested in the memory architecture that would make Embed safe.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- S5 -->
+  <section class="section" id="s5">
+    <div class="section-eyebrow">05 — Governance</div>
+    <h2 class="section-title">When memory goes wrong — <em>and how to prevent it</em></h2>
+
+    <p>Layers one and two — reasoning and tools — produce behaviour that is largely predictable. Memory changes this. An agent whose episodic and procedural layers are accumulating is no longer purely deterministic: its responses are shaped by what it has experienced and what patterns it has been allowed to encode as behaviour. That is the source of its value — and its risk.</p>
+
+    <p>Not all three memory layers carry equal risk. <strong>Semantic memory, grounded in a curated knowledge base and surfaced through retrieval (RAG), is the most mature and lowest-risk layer.</strong> It retrieves facts rather than encoding behaviour — the governance challenge here is content quality and freshness, which organisations already manage for conventional knowledge bases. The harder governance problems sit in episodic and procedural memory, where patterns accumulate and eventually shape how the agent acts.</p>
+
+    <div class="pull-quote">
+      <p>Memory does not improve an agent automatically. Without governance, it compounds errors as readily as it compounds knowledge.</p>
+    </div>
+
+    <p>Four failure modes in episodic and procedural memory warrant governance: encoding wrong patterns from unrepresentative early interactions; procedural ossification around workflows that have since changed; bias amplification where episodic memory reflects dominant user groups at the expense of others; and the correction problem, where a wrong pattern distributed across many memory nodes has no obvious location to fix.</p>
+
+    <p>Five governance responses address these directly: memory provenance so patterns can be traced; a decay and review cadence so procedural rules are revalidated rather than assumed permanent; a human gate before episodes promote into procedural behaviour; a controlled write pipeline separating read from write access; and drift detection to surface divergence before it compounds.</p>
+
+  </section>
+
+  <hr class="rule">
+
+  <!-- S6 -->
+  <section class="section" id="s6">
+    <div class="section-eyebrow">06 — Implications</div>
+    <h2 class="section-title">Strategic implications</h2>
+    <p>The memory architecture described in this paper points to five areas where deliberate choices — on investment, governance, and sequencing — will determine how much value an agent deployment compounds over time.</p>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-icon">P1</div>
+        <div>
+          <div class="principle-title">Design for memory from the first deployment</div>
+          <div class="principle-body">Memory is not a feature to add later — it is an architectural decision. Agents built without memory scaffolding accumulate nothing. Every month of deployment without a memory layer is a month of institutional learning lost. Start small, but start on day one.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P2</div>
+        <div>
+          <div class="principle-title">Treat the coding agent as infrastructure, not tooling</div>
+          <div class="principle-body">The instinct is to think of coding agents as productivity tools for engineers. The right frame is infrastructure: the coding agent's memory — particularly its semantic grounding in delivery standards — is what makes every consumer agent deployment faster and more consistent. Invest in its memory tier accordingly.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P3</div>
+        <div>
+          <div class="principle-title">Anchor semantic memory on open standards where possible</div>
+          <div class="principle-body">Proprietary knowledge bases are slow to build and expensive to maintain. For the coding agent, anchoring semantic memory on a shared framework like agentskills.io means the agent starts with a high baseline of delivery knowledge — and the organisation contributes improvements back to the commons, compounding the ecosystem, not just its own deployment.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P4</div>
+        <div>
+          <div class="principle-title">Make the maturity stage a deliberate governance choice</div>
+          <div class="principle-body">The transition from Assist to Embed — where the agent joins live workflows rather than advising on them — requires an explicit organisational decision about trust, accountability, and oversight. It should not happen by drift. Establish the governance framework before reaching the Embed stage, not after.</div>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="principle-icon">P5</div>
+        <div>
+          <div class="principle-title">The first-mover advantage in AI is a memory advantage</div>
+          <div class="principle-body">A competitor who deploys the same model six months later starts with the same language capability. They cannot start with the same institutional memory. The knowledge accumulated in episodic, semantic, and procedural layers over months of real deployment is a strategic moat — intangible, but real and durable.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="paper-footer">
+    <div class="paper-footer-note">Draft 1.2 · Agent Memory: Explained</div>
+    <div class="paper-footer-note">Assist → Embed → Evolve</div>
+  </div>
+
+</div>
+</body>
+</html>
